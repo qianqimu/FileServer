@@ -22,6 +22,9 @@ jobs:
           curl -L -o gradle/wrapper/gradle-wrapper.jar \
             https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar
 
+      - name: Fix gradlew line endings
+        run: sed -i 's/\r$//' gradlew
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
