@@ -46,8 +46,14 @@ public class FileHttpServer extends NanoHTTPD {
 
         Log.d(TAG, "Request: " + uri);
 
-        // 处理下载请求：/download?file=/path/to/file
-        if (uri.startsWith("/download")) {
+        // 处理下载请求：/download/路径/文件名 （路径式，浏览器从URL获取文件名）
+        if (uri.startsWith("/download/")) {
+            String filePathParam = uri.substring("/download".length()); // 去掉 /download 前缀，保留 /路径/文件名
+            return serveDownload(filePathParam);
+        }
+
+        // 兼容旧的查询参数方式：/download?file=/path/to/file
+        if (uri.equals("/download")) {
             String query = session.getQueryParameterString();
             String filePathParam = null;
             if (query != null) {
@@ -128,10 +134,11 @@ public class FileHttpServer extends NanoHTTPD {
             String mimeType = getMimeType(file.getName());
             InputStream is = new FileInputStream(file);
             Response response = newFixedLengthResponse(Response.Status.OK, mimeType, is, file.length());
-            // 设置下载文件名 - 同时提供 filename 和 filename* 以确保兼容性
+            // 生成 ASCII 安全的文件名，用于不支持 UTF-8 filename 的浏览器
+            String asciiName = toAsciiFileName(file.getName());
             String encodedName = URLEncoder.encode(file.getName(), "UTF-8").replace("+", "%20");
             response.addHeader("Content-Disposition",
-                    "attachment; filename=\"" + file.getName() + "\"; filename*=UTF-8''" + encodedName);
+                    "attachment; filename=\"" + asciiName + "\"; filename*=UTF-8''" + encodedName);
             return response;
         } catch (IOException e) {
             Log.e(TAG, "File read error", e);
@@ -271,13 +278,8 @@ public class FileHttpServer extends NanoHTTPD {
                     sb.append("<div class='file-size'>").append(size).append("</div>");
                 }
                 if (!f.isDirectory()) {
-                    String downloadFileParam;
-                    try {
-                        downloadFileParam = URLEncoder.encode(uri + "/" + f.getName(), "UTF-8").replace("+", "%20");
-                    } catch (Exception e) {
-                        downloadFileParam = uri + "/" + f.getName();
-                    }
-                    sb.append("<a class='btn-download' href='/download?file=").append(downloadFileParam).append("' download=\"").append(escapeHtml(f.getName())).append("\">⬇ 下载</a>");
+                    // 路径式下载URL：/download/路径/文件名，浏览器从URL直接获取文件名
+                    sb.append("<a class='btn-download' href='/download").append(href).append("' download=\"").append(escapeHtml(f.getName())).append("\">⬇ 下载</a>");
                 }
                 sb.append("</li>");
             }
@@ -383,5 +385,29 @@ public class FileHttpServer extends NanoHTTPD {
         return mimeType.startsWith("text/") || mimeType.startsWith("image/")
                 || mimeType.startsWith("video/") || mimeType.startsWith("audio/")
                 || mimeType.equals("application/pdf");
+    }
+
+    /**
+     * 将文件名转为 ASCII 安全名称（保留扩展名）
+     * 非ASCII字符替换为下划线，确保旧浏览器也能正确获取扩展名
+     */
+    private String toAsciiFileName(String fileName) {
+        String name = fileName;
+        String ext = "";
+        int dotIdx = name.lastIndexOf('.');
+        if (dotIdx > 0) {
+            ext = name.substring(dotIdx); // 包含点号，如 ".pdf"
+            name = name.substring(0, dotIdx);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c >= 32 && c <= 126) {
+                sb.append(c);
+            } else {
+                sb.append('_');
+            }
+        }
+        return sb.toString() + ext;
     }
 }
