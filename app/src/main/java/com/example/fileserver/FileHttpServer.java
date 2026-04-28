@@ -46,6 +46,28 @@ public class FileHttpServer extends NanoHTTPD {
 
         Log.d(TAG, "Request: " + uri);
 
+        // 处理下载请求：/download?file=/path/to/file
+        if (uri.startsWith("/download")) {
+            String query = session.getQueryParameterString();
+            String filePathParam = null;
+            if (query != null) {
+                for (String param : query.split("&")) {
+                    String[] kv = param.split("=", 2);
+                    if (kv.length == 2 && "file".equals(kv[0])) {
+                        try {
+                            filePathParam = URLDecoder.decode(kv[1], "UTF-8");
+                        } catch (Exception e) {
+                            filePathParam = kv[1];
+                        }
+                        break;
+                    }
+                }
+            }
+            if (filePathParam != null) {
+                return serveDownload(filePathParam);
+            }
+        }
+
         // 防止路径穿越攻击
         if (uri.contains("..")) {
             return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Forbidden");
@@ -76,8 +98,42 @@ public class FileHttpServer extends NanoHTTPD {
             return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8",
                     buildDirectoryPage(file, uri));
         } else {
-            // 返回文件内容
+            // 返回文件内容（预览模式）
             return serveFile(file);
+        }
+    }
+
+    /**
+     * 处理文件下载请求（强制下载）
+     */
+    private Response serveDownload(String filePathParam) {
+        if (filePathParam.contains("..")) {
+            return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Forbidden");
+        }
+        String filePath = rootPath + filePathParam;
+        File file = new File(filePath);
+        try {
+            String canonicalRoot = new File(rootPath).getCanonicalPath();
+            String canonicalFile = file.getCanonicalPath();
+            if (!canonicalFile.startsWith(canonicalRoot)) {
+                return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Forbidden");
+            }
+        } catch (IOException e) {
+            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Server Error");
+        }
+        if (!file.exists() || file.isDirectory()) {
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "File not found");
+        }
+        try {
+            String mimeType = getMimeType(file.getName());
+            InputStream is = new FileInputStream(file);
+            Response response = newFixedLengthResponse(Response.Status.OK, mimeType, is, file.length());
+            response.addHeader("Content-Disposition",
+                    "attachment; filename*=UTF-8''" + URLEncoder.encode(file.getName(), "UTF-8").replace("+", "%20"));
+            return response;
+        } catch (IOException e) {
+            Log.e(TAG, "File read error", e);
+            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Cannot read file");
         }
     }
 
@@ -151,6 +207,11 @@ public class FileHttpServer extends NanoHTTPD {
         sb.append(".file-meta { font-size: 12px; color: #999; margin-top: 2px; }");
         sb.append(".file-size { font-size: 12px; color: #aaa; margin-left: 16px; flex-shrink: 0; }");
         sb.append(".back-item { background: #fafbff; }");
+        sb.append(".btn-download { display: inline-block; padding: 5px 12px; margin-left: 10px;");
+        sb.append("  background: #667eea; color: white !important; border-radius: 6px;");
+        sb.append("  font-size: 12px; text-decoration: none !important; white-space: nowrap;");
+        sb.append("  flex-shrink: 0; transition: background 0.2s; line-height: 1.4; }");
+        sb.append(".btn-download:hover { background: #5a6fd6; }");
         sb.append(".empty { padding: 48px; text-align: center; color: #bbb; font-size: 15px; }");
         sb.append(".footer { text-align: center; padding: 20px; font-size: 12px; color: #bbb; }");
         sb.append("</style></head><body>");
@@ -206,6 +267,15 @@ public class FileHttpServer extends NanoHTTPD {
                 sb.append("</div>");
                 if (!size.isEmpty()) {
                     sb.append("<div class='file-size'>").append(size).append("</div>");
+                }
+                if (!f.isDirectory()) {
+                    String downloadFileParam;
+                    try {
+                        downloadFileParam = URLEncoder.encode(uri + "/" + f.getName(), "UTF-8").replace("+", "%20");
+                    } catch (Exception e) {
+                        downloadFileParam = uri + "/" + f.getName();
+                    }
+                    sb.append("<a class='btn-download' href='/download?file=").append(downloadFileParam).append("' download>⬇ 下载</a>");
                 }
                 sb.append("</li>");
             }
