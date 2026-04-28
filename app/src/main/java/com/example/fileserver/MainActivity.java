@@ -109,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
         etPort.setText(String.valueOf(savedPort));
 
         btnToggle.setOnClickListener(v -> toggleServer());
-        btnChooseFolder.setOnClickListener(v -> chooseFolder());
+  
 
         // 点击URL复制
         tvUrl.setOnClickListener(v -> {
