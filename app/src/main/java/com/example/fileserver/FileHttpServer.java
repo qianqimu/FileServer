@@ -277,7 +277,6 @@ public class FileHttpServer extends NanoHTTPD {
                     } catch (Exception e) {
                         downloadFileParam = uri + "/" + f.getName();
                     }
-                    String encodedName = encodedName;
                     sb.append("<a class='btn-download' href='/download?file=").append(downloadFileParam).append("' download=\"").append(escapeHtml(f.getName())).append("\">⬇ 下载</a>");
                 }
                 sb.append("</li>");
