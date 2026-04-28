@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FileServer" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#667EEA</item>
+        <item name="colorPrimaryVariant">#764BA2</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#764BA2</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="android:statusBarColor">#667EEA</item>
+        <item name="android:navigationBarColor">#F0F2F5</item>
+    </style>
+</resources>
