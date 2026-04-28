@@ -16,7 +16,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.IBinder;
 import android.provider.DocumentsContract;
-import android.provider.MediaStore;
 import android.provider.Settings;
 import android.text.format.Formatter;
 import android.util.Log;
@@ -110,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
         etPort.setText(String.valueOf(savedPort));
 
         btnToggle.setOnClickListener(v -> toggleServer());
-        btnChooseFolder.setOnClickListener(v -> openFolderPicker());
+        btnChooseFolder.setOnClickListener(v -> chooseFolder());
 
         // 点击URL复制
         tvUrl.setOnClickListener(v -> {
@@ -126,75 +125,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupFolderPicker() {
-        folderPickerLauncher = registerForActivityResult(
-                new ActivityResultContracts.OpenDocumentTree(),
-                uri -> {
-                    if (uri != null) {
-                        // 获取持久化权限
-                        getContentResolver().takePersistableUriPermission(uri,
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-
-                        // 将 content:// URI 转换为真实文件路径
-                        String path = uriToPath(uri);
-                        if (path != null) {
-                            setPath(path);
-                        } else {
-                            // SAF URI 无法转为文件路径，使用 MediaStore 方式
-                            // 降级提示用户使用自定义路径
-                            Toast.makeText(this, "无法获取文件路径，请手动输入", Toast.LENGTH_SHORT).show();
-                            showFolderInputDialog();
-                        }
-                    }
-                });
-    }
-
-    /**
-     * 打开系统文件夹选择器
-     */
-    private void openFolderPicker() {
-        // Android 11+ 优先使用 SAF 目录选择器
-        try {
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-            folderPickerLauncher.launch(null);
-        } catch (Exception e) {
-            // 降级到自定义对话框
-            showFolderInputDialog();
-        }
-    }
-
-    /**
-     * 将 SAF content:// URI 转换为文件系统路径
-     */
-    private String uriToPath(Uri uri) {
-        try {
-            // 对于 External Storage 的 URI，尝试直接获取路径
-            String docId = DocumentsContract.getTreeDocumentId(uri);
-            String[] split = docId.split(":");
-            String type = split[0];
-            String relativePath = split.length > 1 ? split[1] : "";
-
-            if ("primary".equalsIgnoreCase(type)) {
-                // 主存储
-                return Environment.getExternalStorageDirectory().getAbsolutePath()
-                        + (relativePath.isEmpty() ? "" : "/" + relativePath);
-            } else {
-                // SD 卡等外部存储
-                File[] externalDirs = getExternalFilesDirs(null);
-                for (File dir : externalDirs) {
-                    if (dir != null && dir.getAbsolutePath().contains("/" + type + "/")) {
-                        String basePath = dir.getAbsolutePath();
-                        int idx = basePath.indexOf("/Android/");
-                        if (idx > 0) {
-                            return basePath.substring(0, idx)
-                                    + (relativePath.isEmpty() ? "" : "/" + relativePath);
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "URI to path conversion failed", e);
-        }
-        return null;
+        // Android 5.0+ 使用 SAF 文件选择，但我们用文件路径更方便
+        // 这里使用自定义文件选择对话框
+        btnChooseFolder.setOnClickListener(v -> showFolderInputDialog());
     }
 
     private void showFolderInputDialog() {
