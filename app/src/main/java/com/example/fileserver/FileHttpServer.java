@@ -286,13 +286,17 @@ public class FileHttpServer extends NanoHTTPD {
                     // 直接链接到 /download?file=路径/文件名
                     // 只对非 ASCII 编码，保留 / 不编码（避免 %2F 兼容性问题）
                     String filePath = (uri.endsWith("/") ? uri : uri + "/") + f.getName();
-                    String encoded = URLEncoder.encode(filePath, "UTF-8")
-                            .replace("+", "%20")
-                            .replace("%2F", "/")
-                            .replace("%3A", ":");
-                    sb.append("<a class='btn-download' href='/download?file=")
-                            .append(encoded)
-                            .append("' download>⬇ 下载</a>");
+                    try {
+                        String encoded = URLEncoder.encode(filePath, "UTF-8")
+                                .replace("+", "%20")
+                                .replace("%2F", "/")
+                                .replace("%3A", ":");
+                        sb.append("<a class='btn-download' href='/download?file=")
+                                .append(encoded)
+                                .append("' download>⬇ 下载</a>");
+                    } catch (java.io.UnsupportedEncodingException e) {
+                        // UTF-8 始终可用，不会到达此处
+                    }
                 }
                 sb.append("</li>");
             }
