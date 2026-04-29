@@ -10,7 +10,6 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
@@ -46,34 +45,6 @@ public class FileHttpServer extends NanoHTTPD {
 
         Log.d(TAG, "Request: " + uri);
 
-        // 处理下载请求：/download/路径/文件名 （路径式，浏览器从URL获取文件名）
-        if (uri.startsWith("/download/")) {
-            String filePathParam = uri.substring("/download".length()); // 去掉 /download 前缀，保留 /路径/文件名
-            return serveDownload(filePathParam);
-        }
-
-        // 兼容旧的查询参数方式：/download?file=/path/to/file
-        if (uri.equals("/download")) {
-            String query = session.getQueryParameterString();
-            String filePathParam = null;
-            if (query != null) {
-                for (String param : query.split("&")) {
-                    String[] kv = param.split("=", 2);
-                    if (kv.length == 2 && "file".equals(kv[0])) {
-                        try {
-                            filePathParam = URLDecoder.decode(kv[1], "UTF-8");
-                        } catch (Exception e) {
-                            filePathParam = kv[1];
-                        }
-                        break;
-                    }
-                }
-            }
-            if (filePathParam != null) {
-                return serveDownload(filePathParam);
-            }
-        }
-
         // 防止路径穿越攻击
         if (uri.contains("..")) {
             return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Forbidden");
@@ -104,41 +75,18 @@ public class FileHttpServer extends NanoHTTPD {
             return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8",
                     buildDirectoryPage(file, uri));
         } else {
-            // 返回文件内容（预览模式）
+            // 直接返回文件内容（统一强制下载）
             return serveFile(file);
         }
     }
 
     /**
-     * 处理文件下载请求（强制下载）
+     * 提供文件下载（统一强制下载，MIME 用 octet-stream 确保浏览器不预览）
      */
-    private Response serveDownload(String filePathParam) {
-        Log.d(TAG, "serveDownload: filePathParam=" + filePathParam + ", rootPath=" + rootPath);
-        if (filePathParam.contains("..")) {
-            return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Forbidden");
-        }
-        String filePath = rootPath + filePathParam;
-        File file = new File(filePath);
-        Log.d(TAG, "serveDownload: resolved path=" + filePath + ", exists=" + file.exists()
-                + ", isDir=" + file.isDirectory() + ", size=" + (file.exists() ? file.length() : "N/A"));
+    private Response serveFile(File file) {
         try {
-            String canonicalRoot = new File(rootPath).getCanonicalPath();
-            String canonicalFile = file.getCanonicalPath();
-            if (!canonicalFile.startsWith(canonicalRoot)) {
-                return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Forbidden");
-            }
-        } catch (IOException e) {
-            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Server Error");
-        }
-        if (!file.exists() || file.isDirectory()) {
-            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/html; charset=utf-8",
-                    buildErrorPage("404 - 文件未找到", filePath));
-        }
-        try {
-            // 强制下载统一用 application/octet-stream，确保浏览器不会尝试预览或篡改文件
             InputStream is = new FileInputStream(file);
             Response response = newFixedLengthResponse(Response.Status.OK, "application/octet-stream", is, file.length());
-            // 生成 ASCII 安全的文件名，用于不支持 UTF-8 filename 的浏览器
             String asciiName = toAsciiFileName(file.getName());
             String encodedName = URLEncoder.encode(file.getName(), "UTF-8").replace("+", "%20");
             response.addHeader("Content-Disposition",
@@ -148,26 +96,6 @@ public class FileHttpServer extends NanoHTTPD {
             Log.e(TAG, "File read error", e);
             return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/html; charset=utf-8",
                     buildErrorPage("500 - 文件读取失败", e.getMessage() != null ? e.getMessage() : "未知错误"));
-        }
-    }
-
-    /**
-     * 提供文件下载
-     */
-    private Response serveFile(File file) {
-        try {
-            String mimeType = getMimeType(file.getName());
-            InputStream is = new FileInputStream(file);
-            Response response = newFixedLengthResponse(Response.Status.OK, mimeType, is, file.length());
-            // 对非媒体文件强制下载
-            if (!isPreviewable(mimeType)) {
-                response.addHeader("Content-Disposition",
-                        "attachment; filename*=UTF-8''" + URLEncoder.encode(file.getName(), "UTF-8").replace("+", "%20"));
-            }
-            return response;
-        } catch (IOException e) {
-            Log.e(TAG, "File read error", e);
-            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Cannot read file");
         }
     }
 
@@ -274,19 +202,11 @@ public class FileHttpServer extends NanoHTTPD {
 
                 sb.append("<li class='file-item'>");
                 sb.append("<div class='file-icon'>").append(icon).append("</div>");
-                sb.append("<div class='file-info'>");
-                sb.append("<div class='file-name'><a href='").append(href).append("'>")
-                        .append(escapeHtml(f.getName())).append("</a></div>");
-                sb.append("<div class='file-meta'>").append(date).append("</div>");
-                sb.append("</div>");
-                if (!size.isEmpty()) {
-                    sb.append("<div class='file-size'>").append(size).append("</div>");
-                }
                 if (!f.isDirectory()) {
-                    // 路径式 URL /download/路径/文件名，浏览器从 URL 末尾获取文件名
-                    // 只对文件名编码，路径分隔符 / 保持原样
+                    // 文件链接直接指向文件路径，点击即下载
+                    // URL 格式: /路径/文件名，浏览器从 URL 末尾获取文件名
                     String filePath = (uri.endsWith("/") ? uri : uri + "/") + f.getName();
-                    String encoded = filePath; // 默认不编码（ASCII 路径）
+                    String encoded = filePath;
                     try {
                         encoded = "";
                         String[] segments = filePath.split("/", -1);
@@ -299,11 +219,23 @@ public class FileHttpServer extends NanoHTTPD {
                     } catch (java.io.UnsupportedEncodingException e) {
                         // UTF-8 始终可用，不会到达此处
                     }
-                    sb.append("<a class='btn-download' href='/download")
-                            .append(encoded)
-                            .append("'>⬇ 下载</a>");
+                    sb.append("<div class='file-info'>");
+                    sb.append("<div class='file-name'><a href='").append(encoded).append("'>")
+                            .append(escapeHtml(f.getName())).append("</a></div>");
+                    sb.append("<div class='file-meta'>").append(date).append("</div>");
+                    sb.append("</div>");
+                    if (!size.isEmpty()) {
+                        sb.append("<div class='file-size'>").append(size).append("</div>");
+                    }
+                    sb.append("</li>");
+                } else {
+                    sb.append("<div class='file-info'>");
+                    sb.append("<div class='file-name'><a href='").append(href).append("'>")
+                            .append(escapeHtml(f.getName())).append("</a></div>");
+                    sb.append("<div class='file-meta'>").append(date).append("</div>");
+                    sb.append("</div>");
+                    sb.append("</li>");
                 }
-                sb.append("</li>");
             }
             sb.append("</ul>");
         }
@@ -387,34 +319,6 @@ public class FileHttpServer extends NanoHTTPD {
         return "📄";
     }
 
-    private String getMimeType(String fileName) {
-        String lower = fileName.toLowerCase();
-        if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html; charset=utf-8";
-        if (lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".log"))
-            return "text/plain; charset=utf-8";
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-        if (lower.endsWith(".png")) return "image/png";
-        if (lower.endsWith(".gif")) return "image/gif";
-        if (lower.endsWith(".webp")) return "image/webp";
-        if (lower.endsWith(".svg")) return "image/svg+xml";
-        if (lower.endsWith(".mp4")) return "video/mp4";
-        if (lower.endsWith(".mp3")) return "audio/mpeg";
-        if (lower.endsWith(".pdf")) return "application/pdf";
-        if (lower.endsWith(".json")) return "application/json; charset=utf-8";
-        if (lower.endsWith(".xml")) return "application/xml; charset=utf-8";
-        return "application/octet-stream";
-    }
-
-    private boolean isPreviewable(String mimeType) {
-        return mimeType.startsWith("text/") || mimeType.startsWith("image/")
-                || mimeType.startsWith("video/") || mimeType.startsWith("audio/")
-                || mimeType.equals("application/pdf");
-    }
-
-    /**
-     * 将文件名转为 ASCII 安全名称（保留扩展名）
-     * 非ASCII字符替换为下划线，确保旧浏览器也能正确获取扩展名
-     */
     private String toAsciiFileName(String fileName) {
         String name = fileName;
         String ext = "";
