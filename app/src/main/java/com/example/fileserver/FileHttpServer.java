@@ -279,15 +279,11 @@ public class FileHttpServer extends NanoHTTPD {
                 }
                 if (!f.isDirectory()) {
                     // 用 JavaScript fetch+Blob 触发下载，完全控制文件名，兼容所有浏览器
-                    String downloadFileParam;
-                    try {
-                        downloadFileParam = URLEncoder.encode(uri + "/" + f.getName(), "UTF-8").replace("+", "%20");
-                    } catch (Exception e) {
-                        downloadFileParam = uri + "/" + f.getName();
-                    }
+                    String downloadFileParam = uri + "/" + f.getName();
                     String safeFileName = escapeHtml(f.getName()).replace("'", "\\'");
+                    String safeFileParam = escapeHtml(downloadFileParam).replace("'", "\\'");
                     sb.append("<a class='btn-download' href='#' onclick=\"dlFile('")
-                            .append(downloadFileParam).append("','").append(safeFileName).append("');return false;\">⬇ 下载</a>");
+                            .append(safeFileParam).append("','").append(safeFileName).append("');return false;\">⬇ 下载</a>");
                 }
                 sb.append("</li>");
             }
