@@ -113,11 +113,14 @@ public class FileHttpServer extends NanoHTTPD {
      * 处理文件下载请求（强制下载）
      */
     private Response serveDownload(String filePathParam) {
+        Log.d(TAG, "serveDownload: filePathParam=" + filePathParam + ", rootPath=" + rootPath);
         if (filePathParam.contains("..")) {
             return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Forbidden");
         }
         String filePath = rootPath + filePathParam;
         File file = new File(filePath);
+        Log.d(TAG, "serveDownload: resolved path=" + filePath + ", exists=" + file.exists()
+                + ", isDir=" + file.isDirectory() + ", size=" + (file.exists() ? file.length() : "N/A"));
         try {
             String canonicalRoot = new File(rootPath).getCanonicalPath();
             String canonicalFile = file.getCanonicalPath();
@@ -128,7 +131,8 @@ public class FileHttpServer extends NanoHTTPD {
             return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Server Error");
         }
         if (!file.exists() || file.isDirectory()) {
-            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "File not found");
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/html; charset=utf-8",
+                    buildErrorPage("404 - 文件未找到", filePath));
         }
         try {
             // 强制下载统一用 application/octet-stream，确保浏览器不会尝试预览或篡改文件
@@ -142,7 +146,8 @@ public class FileHttpServer extends NanoHTTPD {
             return response;
         } catch (IOException e) {
             Log.e(TAG, "File read error", e);
-            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Cannot read file");
+            return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/html; charset=utf-8",
+                    buildErrorPage("500 - 文件读取失败", e.getMessage() != null ? e.getMessage() : "未知错误"));
         }
     }
 
@@ -278,11 +283,15 @@ public class FileHttpServer extends NanoHTTPD {
                     sb.append("<div class='file-size'>").append(size).append("</div>");
                 }
                 if (!f.isDirectory()) {
-                    // 直接链接到 /download?file=路径/文件名，浏览器会自动对 href 中的非 ASCII 做 percent-encoding
-                    // 服务端通过 Content-Disposition: attachment 控制文件名
-                    String filePath = uri + "/" + f.getName();
+                    // 直接链接到 /download?file=路径/文件名
+                    // 只对非 ASCII 编码，保留 / 不编码（避免 %2F 兼容性问题）
+                    String filePath = (uri.endsWith("/") ? uri : uri + "/") + f.getName();
+                    String encoded = URLEncoder.encode(filePath, "UTF-8")
+                            .replace("+", "%20")
+                            .replace("%2F", "/")
+                            .replace("%3A", ":");
                     sb.append("<a class='btn-download' href='/download?file=")
-                            .append(URLEncoder.encode(filePath, "UTF-8").replace("+", "%20"))
+                            .append(encoded)
                             .append("' download>⬇ 下载</a>");
                 }
                 sb.append("</li>");
