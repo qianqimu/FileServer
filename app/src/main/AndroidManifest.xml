@@ -21,7 +21,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.FileServer">
+        android:theme="@style/Theme.FileServer"
+        android:requestLegacyExternalStorage="true">
 
         <activity
             android:name=".MainActivity"
