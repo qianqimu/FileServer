@@ -71,6 +71,13 @@ public class FileHttpServer extends NanoHTTPD {
         }
 
         if (file.isDirectory()) {
+            Log.d(TAG, "Listing directory: " + file.getAbsolutePath());
+            File[] testList = file.listFiles();
+            if (testList == null) {
+                Log.e(TAG, "listFiles() returned null! No read permission for: " + file.getAbsolutePath());
+            } else {
+                Log.d(TAG, "Found " + testList.length + " items in directory");
+            }
             // 返回目录列表页面
             return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8",
                     buildDirectoryPage(file, uri));
@@ -124,6 +131,7 @@ public class FileHttpServer extends NanoHTTPD {
      */
     private String buildDirectoryPage(File dir, String uri) {
         File[] files = dir.listFiles();
+        boolean noPermission = (files == null);
         if (files == null) files = new File[0];
 
         // 排序：目录优先，然后按名称
@@ -204,7 +212,15 @@ public class FileHttpServer extends NanoHTTPD {
         }
 
         if (files.length == 0) {
-            sb.append("</ul><div class='empty'>🗂️ 此文件夹为空</div>");
+            sb.append("</ul><div class='empty'>🗂️ ");
+            if (noPermission) {
+                sb.append("无权限读取此文件夹！请确认已授予存储权限。<br>");
+                sb.append("<span style='font-size:12px;color:#e53935;'>路径: ")
+                        .append(escapeHtml(dir.getAbsolutePath())).append("</span>");
+            } else {
+                sb.append("此文件夹为空");
+            }
+            sb.append("</div>");
         } else {
             for (File f : files) {
                 String encodedName;
