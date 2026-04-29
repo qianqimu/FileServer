@@ -280,10 +280,11 @@ public class FileHttpServer extends NanoHTTPD {
                 if (!f.isDirectory()) {
                     // 用 JavaScript fetch+Blob 触发下载，完全控制文件名，兼容所有浏览器
                     String downloadFileParam = uri + "/" + f.getName();
-                    String safeFileName = escapeHtml(f.getName()).replace("'", "\\'");
-                    String safeFileParam = escapeHtml(downloadFileParam).replace("'", "\\'");
-                    sb.append("<a class='btn-download' href='#' onclick=\"dlFile('")
-                            .append(safeFileParam).append("','").append(safeFileName).append("');return false;\">⬇ 下载</a>");
+                    sb.append("<a class='btn-download' href='#' data-path='")
+                            .append(escapeHtml(downloadFileParam))
+                            .append("' data-name='")
+                            .append(escapeHtml(f.getName()))
+                            .append("' onclick='dlFile(this);return false;'>⬇ 下载</a>");
                 }
                 sb.append("</li>");
             }
@@ -297,9 +298,10 @@ public class FileHttpServer extends NanoHTTPD {
         // JavaScript 下载函数：通过 fetch + Blob + a.click() 控制文件名
         // 解决闪电浏览器等无法从 URL/Content-Disposition 正确获取文件名的问题
         sb.append("<script>");
-        sb.append("function dlFile(fileParam,fileName){");
+        sb.append("function dlFile(el){");
+        sb.append("var fp=el.getAttribute('data-path'),fn=el.getAttribute('data-name');");
         sb.append("var x=new XMLHttpRequest();");
-        sb.append("x.open('GET','/download?file='+encodeURIComponent(fileParam),true);");
+        sb.append("x.open('GET','/download?file='+encodeURIComponent(fp),true);");
         sb.append("x.responseType='blob';");
         sb.append("x.onload=function(){");
         sb.append("  if(x.status===200){");
@@ -307,7 +309,7 @@ public class FileHttpServer extends NanoHTTPD {
         sb.append("    var u=URL.createObjectURL(b);");
         sb.append("    var a=document.createElement('a');");
         sb.append("    a.href=u;");
-        sb.append("    a.download=fileName;");
+        sb.append("    a.download=fn;");
         sb.append("    document.body.appendChild(a);");
         sb.append("    a.click();");
         sb.append("    document.body.removeChild(a);");
