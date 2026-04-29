@@ -85,8 +85,9 @@ public class FileHttpServer extends NanoHTTPD {
      */
     private Response serveFile(File file) {
         try {
+            String mimeType = getMimeType(file.getName());
             InputStream is = new FileInputStream(file);
-            Response response = newFixedLengthResponse(Response.Status.OK, "application/octet-stream", is, file.length());
+            Response response = newFixedLengthResponse(Response.Status.OK, mimeType, is, file.length());
             String asciiName = toAsciiFileName(file.getName());
             String encodedName = URLEncoder.encode(file.getName(), "UTF-8").replace("+", "%20");
             response.addHeader("Content-Disposition",
@@ -97,6 +98,25 @@ public class FileHttpServer extends NanoHTTPD {
             return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/html; charset=utf-8",
                     buildErrorPage("500 - 文件读取失败", e.getMessage() != null ? e.getMessage() : "未知错误"));
         }
+    }
+
+    private String getMimeType(String fileName) {
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".apk")) return "application/vnd.android.package-archive";
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        if (lower.endsWith(".doc") || lower.endsWith(".docx")) return "application/msword";
+        if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) return "application/vnd.ms-excel";
+        if (lower.endsWith(".ppt") || lower.endsWith(".pptx")) return "application/vnd.ms-powerpoint";
+        if (lower.endsWith(".zip")) return "application/zip";
+        if (lower.endsWith(".rar")) return "application/x-rar-compressed";
+        if (lower.endsWith(".7z")) return "application/x-7z-compressed";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".mp4")) return "video/mp4";
+        if (lower.endsWith(".mp3")) return "audio/mpeg";
+        if (lower.endsWith(".txt")) return "text/plain";
+        return "application/octet-stream";
     }
 
     /**
