@@ -278,8 +278,16 @@ public class FileHttpServer extends NanoHTTPD {
                     sb.append("<div class='file-size'>").append(size).append("</div>");
                 }
                 if (!f.isDirectory()) {
-                    // 路径式下载URL：/download/路径/文件名，浏览器从URL直接获取文件名
-                    sb.append("<a class='btn-download' href='/download").append(href).append("' download=\"").append(escapeHtml(f.getName())).append("\">⬇ 下载</a>");
+                    // 用 JavaScript fetch+Blob 触发下载，完全控制文件名，兼容所有浏览器
+                    String downloadFileParam;
+                    try {
+                        downloadFileParam = URLEncoder.encode(uri + "/" + f.getName(), "UTF-8").replace("+", "%20");
+                    } catch (Exception e) {
+                        downloadFileParam = uri + "/" + f.getName();
+                    }
+                    String safeFileName = escapeHtml(f.getName()).replace("'", "\\'");
+                    sb.append("<a class='btn-download' href='#' onclick=\"dlFile('")
+                            .append(downloadFileParam).append("','").append(safeFileName).append("');return false;\">⬇ 下载</a>");
                 }
                 sb.append("</li>");
             }
@@ -288,7 +296,33 @@ public class FileHttpServer extends NanoHTTPD {
 
         sb.append("</div>");
         sb.append("<div class='footer'>FileServer · 局域网文件共享</div>");
-        sb.append("</div></body></html>");
+        sb.append("</div>");
+
+        // JavaScript 下载函数：通过 fetch + Blob + a.click() 控制文件名
+        // 解决闪电浏览器等无法从 URL/Content-Disposition 正确获取文件名的问题
+        sb.append("<script>");
+        sb.append("function dlFile(fileParam,fileName){");
+        sb.append("var x=new XMLHttpRequest();");
+        sb.append("x.open('GET','/download?file='+encodeURIComponent(fileParam),true);");
+        sb.append("x.responseType='blob';");
+        sb.append("x.onload=function(){");
+        sb.append("  if(x.status===200){");
+        sb.append("    var b=new Blob([x.response]);");
+        sb.append("    var u=URL.createObjectURL(b);");
+        sb.append("    var a=document.createElement('a');");
+        sb.append("    a.href=u;");
+        sb.append("    a.download=fileName;");
+        sb.append("    document.body.appendChild(a);");
+        sb.append("    a.click();");
+        sb.append("    document.body.removeChild(a);");
+        sb.append("    URL.revokeObjectURL(u);");
+        sb.append("  }else{alert('下载失败:'+x.status);}");
+        sb.append("};");
+        sb.append("x.send();");
+        sb.append("}");
+        sb.append("</script>");
+
+        sb.append("</body></html>");
 
         return sb.toString();
     }
