@@ -283,20 +283,25 @@ public class FileHttpServer extends NanoHTTPD {
                     sb.append("<div class='file-size'>").append(size).append("</div>");
                 }
                 if (!f.isDirectory()) {
-                    // 直接链接到 /download?file=路径/文件名
-                    // 只对非 ASCII 编码，保留 / 不编码（避免 %2F 兼容性问题）
+                    // 路径式 URL /download/路径/文件名，浏览器从 URL 末尾获取文件名
+                    // 只对文件名编码，路径分隔符 / 保持原样
                     String filePath = (uri.endsWith("/") ? uri : uri + "/") + f.getName();
+                    String encoded = filePath; // 默认不编码（ASCII 路径）
                     try {
-                        String encoded = URLEncoder.encode(filePath, "UTF-8")
-                                .replace("+", "%20")
-                                .replace("%2F", "/")
-                                .replace("%3A", ":");
-                        sb.append("<a class='btn-download' href='/download?file=")
-                                .append(encoded)
-                                .append("' download>⬇ 下载</a>");
+                        encoded = "";
+                        String[] segments = filePath.split("/", -1);
+                        for (int i = 0; i < segments.length; i++) {
+                            if (i > 0) encoded += "/";
+                            if (!segments[i].isEmpty()) {
+                                encoded += URLEncoder.encode(segments[i], "UTF-8").replace("+", "%20");
+                            }
+                        }
                     } catch (java.io.UnsupportedEncodingException e) {
                         // UTF-8 始终可用，不会到达此处
                     }
+                    sb.append("<a class='btn-download' href='/download")
+                            .append(encoded)
+                            .append("'>⬇ 下载</a>");
                 }
                 sb.append("</li>");
             }
