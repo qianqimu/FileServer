@@ -175,12 +175,11 @@ public class FileHttpServer extends NanoHTTPD {
         sb.append("  flex-shrink: 0; transition: background 0.2s; line-height: 1.4; }");
         sb.append(".btn-download:hover { background: #5a6fd6; }");
         sb.append(".empty { padding: 48px; text-align: center; color: #bbb; font-size: 15px; }");
-        sb.append(".footer { text-align: center; padding: 20px; font-size: 12px; color: #bbb; }");
         sb.append("</style></head><body>");
 
         // 头部
         sb.append("<div class='header'>");
-        sb.append("<h1>📁 文件服务器</h1>");
+        sb.append("<h1>📁 http文件传输</h1>");
         sb.append("<div class='breadcrumb'>").append(buildBreadcrumb(uri)).append("</div>");
         sb.append("</div>");
 
@@ -247,6 +246,7 @@ public class FileHttpServer extends NanoHTTPD {
                     if (!size.isEmpty()) {
                         sb.append("<div class='file-size'>").append(size).append("</div>");
                     }
+                    sb.append("<a class='btn-download' href='").append(encoded).append("'>下载</a>");
                     sb.append("</li>");
                 } else {
                     sb.append("<div class='file-info'>");
@@ -261,7 +261,6 @@ public class FileHttpServer extends NanoHTTPD {
         }
 
         sb.append("</div>");
-        sb.append("<div class='footer'>FileServer · 局域网文件共享</div>");
         sb.append("</div>");
 
         sb.append("</body></html>");
